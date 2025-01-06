@@ -1,14 +1,10 @@
-#include <BluetoothSerial.h>
 #include <AccelStepper.h>
 
-// Initialize Bluetooth Serial
-BluetoothSerial Bluetooth;
-
 // Define the stepper motors and the pins they will use
-AccelStepper LeftBackWheel(1, 42, 43);   // (Type:driver, STEP, DIR) - Stepper1
-AccelStepper LeftFrontWheel(1, 40, 41);  // Stepper2
-AccelStepper RightBackWheel(1, 44, 45);  // Stepper3
-AccelStepper RightFrontWheel(1, 46, 47); // Stepper4
+AccelStepper LeftBackWheel(1, 26, 27);   // STEP: GPIO 26, DIR: GPIO 27
+AccelStepper LeftFrontWheel(1, 14, 12);  // STEP: GPIO 14, DIR: GPIO 12
+AccelStepper RightBackWheel(1, 25, 33);  // STEP: GPIO 25, DIR: GPIO 33
+AccelStepper RightFrontWheel(1, 32, 15); // STEP: GPIO 32, DIR: GPIO 15
 
 #define led 14
 
@@ -31,7 +27,7 @@ void rotateLeft();
 void rotateRight();
 void stopMoving();
 void runSteps();
-void parseBluetoothData(String data);
+void parseSerialData(String data);
 
 void setup() {
   // Set initial speed limits for the steppers
@@ -41,17 +37,16 @@ void setup() {
   RightBackWheel.setMaxSpeed(3000);
 
   Serial.begin(38400);
-  Bluetooth.begin("ESP32_Mobile_Robot"); // Set the name for the Bluetooth device
-  Serial.println("Bluetooth Initialized. Waiting for connections...");
+  Serial.println("Serial Communication Initialized. Waiting for input...");
 
   pinMode(led, OUTPUT);
 }
 
 void loop() {
-  // Check for incoming data from Bluetooth
-  if (Bluetooth.available()) {
-    String data = Bluetooth.readStringUntil('\n');  // Read the data until newline
-    parseBluetoothData(data);  // Parse the received data (speed and direction)
+  // Check for incoming data from Serial
+  if (Serial.available()) {
+    String data = Serial.readStringUntil('\n');  // Read the data until newline
+    parseSerialData(data);  // Parse the received data (speed and direction)
 
     // Perform actions based on the value of m
     switch (m) {
@@ -109,8 +104,7 @@ void loop() {
   }
 }
 
-// Movement functions implementation (example)
-
+// Movement functions
 void moveSidewaysLeft() {
   LeftFrontWheel.setSpeed(wheelSpeed);
   LeftBackWheel.setSpeed(-wheelSpeed);
@@ -128,56 +122,56 @@ void moveSidewaysRight() {
 void moveForward() {
   LeftFrontWheel.setSpeed(wheelSpeed);
   LeftBackWheel.setSpeed(wheelSpeed);
-  RightFrontWheel.setSpeed(wheelSpeed);
-  RightBackWheel.setSpeed(wheelSpeed);
+  RightFrontWheel.setSpeed(-wheelSpeed);
+  RightBackWheel.setSpeed(-wheelSpeed);
 }
 
 void moveBackward() {
   LeftFrontWheel.setSpeed(-wheelSpeed);
   LeftBackWheel.setSpeed(-wheelSpeed);
-  RightFrontWheel.setSpeed(-wheelSpeed);
-  RightBackWheel.setSpeed(-wheelSpeed);
+  RightFrontWheel.setSpeed(wheelSpeed);
+  RightBackWheel.setSpeed(wheelSpeed);
 }
 
 void moveRightForward() {
-  LeftFrontWheel.setSpeed(wheelSpeed);
-  LeftBackWheel.setSpeed(0);
-  RightFrontWheel.setSpeed(wheelSpeed);
+  LeftFrontWheel.setSpeed(0);
+  LeftBackWheel.setSpeed(wheelSpeed);
+  RightFrontWheel.setSpeed(-wheelSpeed);
   RightBackWheel.setSpeed(0);
 }
 
 void moveLeftForward() {
-  LeftFrontWheel.setSpeed(0);
-  LeftBackWheel.setSpeed(wheelSpeed);
-  RightFrontWheel.setSpeed(0);
-  RightBackWheel.setSpeed(wheelSpeed);
-}
-
-void moveRightBackward() {
-  LeftFrontWheel.setSpeed(-wheelSpeed);
+  LeftFrontWheel.setSpeed(wheelSpeed);
   LeftBackWheel.setSpeed(0);
-  RightFrontWheel.setSpeed(-wheelSpeed);
-  RightBackWheel.setSpeed(0);
-}
-
-void moveLeftBackward() {
-  LeftFrontWheel.setSpeed(0);
-  LeftBackWheel.setSpeed(-wheelSpeed);
   RightFrontWheel.setSpeed(0);
   RightBackWheel.setSpeed(-wheelSpeed);
 }
 
+void moveRightBackward() {
+  LeftFrontWheel.setSpeed(0);
+  LeftBackWheel.setSpeed(-wheelSpeed);
+  RightFrontWheel.setSpeed(wheelSpeed);
+  RightBackWheel.setSpeed(0);
+}
+
+void moveLeftBackward() {
+  LeftFrontWheel.setSpeed(-wheelSpeed);
+  LeftBackWheel.setSpeed(0);
+  RightFrontWheel.setSpeed(0);
+  RightBackWheel.setSpeed(wheelSpeed);
+}
+
 void rotateLeft() {
   LeftFrontWheel.setSpeed(-wheelSpeed);
-  LeftBackWheel.setSpeed(wheelSpeed);
-  RightFrontWheel.setSpeed(wheelSpeed);
+  LeftBackWheel.setSpeed(-wheelSpeed);
+  RightFrontWheel.setSpeed(-wheelSpeed);
   RightBackWheel.setSpeed(-wheelSpeed);
 }
 
 void rotateRight() {
   LeftFrontWheel.setSpeed(wheelSpeed);
-  LeftBackWheel.setSpeed(-wheelSpeed);
-  RightFrontWheel.setSpeed(-wheelSpeed);
+  LeftBackWheel.setSpeed(wheelSpeed);
+  RightFrontWheel.setSpeed(wheelSpeed);
   RightBackWheel.setSpeed(wheelSpeed);
 }
 
@@ -189,19 +183,24 @@ void stopMoving() {
 }
 
 void runSteps() {
-  // Example logic for running the steps using the stored positions
-  if (dataIndex > 0) {
-    LeftBackWheel.setCurrentPosition(lbw[0]);
-    LeftFrontWheel.setCurrentPosition(lfw[0]);
-    RightBackWheel.setCurrentPosition(rbw[0]);
-    RightFrontWheel.setCurrentPosition(rfw[0]);
-    // Additional logic to run the wheels based on the saved positions
+  for (int i = dataIndex - 1; i >= 0; i--) {
+    LeftBackWheel.moveTo(lbw[i]);
+    LeftFrontWheel.moveTo(lfw[i]);
+    RightBackWheel.moveTo(rbw[i]);
+    RightFrontWheel.moveTo(rfw[i]);
+
+    while (LeftBackWheel.distanceToGo() != 0 || LeftFrontWheel.distanceToGo() != 0 ||
+           RightBackWheel.distanceToGo() != 0 || RightFrontWheel.distanceToGo() != 0) {
+      LeftBackWheel.run();
+      LeftFrontWheel.run();
+      RightBackWheel.run();
+      RightFrontWheel.run();
+    }
   }
 }
 
-
-
-void parseBluetoothData(String data) {
+// Serial Data Parsing
+void parseSerialData(String data) {
   // Parse the input for direction and speed
   int dIndex = data.indexOf('d'); // Find 'd' for direction
   int sIndex = data.indexOf('s'); // Find 's' for speed
